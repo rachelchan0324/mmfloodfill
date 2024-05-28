@@ -3,38 +3,30 @@
 #include <stdio.h>
 
 typedef struct {
-    int row;
-    int col;
+    int x;
+    int y;
 } Cell;
 
-// state arrays
+// wall arrays (i, j)
 int horizontalWalls [17][16];
 int verticalWalls [16][17];
+// distance array (x, y)
 int manhattanDistances [16][16];
 
 // starting position and direction
-int x;
-int y;
-int heading;
+int x = 0;
+int y = 0;
+int heading = NORTH;
 
 // intitialization state
 int inited = 0;
 
 void init() {
     // set all walls to empty and all manhattan distances to blank
-    for(int i = 0; i < 17; i++){
-        for(int j = 0; j < 16; j++){
-            horizontalWalls[i][j] = 0;
-        }
-    }
-    for(int i = 0; i < 16; i++){
-        for(int j = 0; j < 17; j++){
-            verticalWalls[i][j] = 0;
-        }
-    }
     for(int i = 0; i < 16; i++) {
         for(int j = 0; j < 16; j++) {
-            manhattanDistances[i][j] = -1;
+            horizontalWalls[i][j] = 0;
+            verticalWalls[i][j] = 0;
         }
     }
 
@@ -43,44 +35,33 @@ void init() {
         verticalWalls[i][0] = 1;
         verticalWalls[i][16] = 1;
 
-        horizontalWalls[16][i] = 1;
         horizontalWalls[0][i] = 1;
+        horizontalWalls[16][i] = 1;
     }
-
-    // init goals to zero
-    manhattanDistances[7][7] = 0;
-    manhattanDistances[7][8] = 0;
-    manhattanDistances[8][7] = 0;
-    manhattanDistances[8][8] = 0;
-
-    // init vars
-    x = 0;
-    y = 0;
-    heading = NORTH;
 }
 
-void setWalls(){
-    // set vertical walls
-    for(int i = 0; i < 16; i++){
-        for(int j = 0; j < 17; j++){
-            if(verticalWalls[i][j] == 1){
-                if(j == 16){
-                    API_setWall(i, j - 1, 'n');
+void setWalls() {
+    // set horizontal walls
+    for(int x = 0; x < 16; x++){
+        for(int y = 0; y < 17; y++){
+            if(horizontalWalls[y][x] == 1){
+                if(y == 16){
+                    API_setWall(x, y - 1, 'n');
                 } else{
-                    API_setWall(i, j, 's');
+                    API_setWall(x, y, 's');
                 }
             }
         }
     }
 
-    // set horizontal walls
-    for(int i = 0; i < 17; i++) {
-        for(int j = 0; j < 16; j++){
-            if(horizontalWalls[i][j] == 1) {
-                if(i == 16){
-                    API_setWall(i - 1, j, 'e');
+    // set vertical walls
+    for(int x = 0; x < 17; x++) {
+        for(int y = 0; y < 16; y++){
+            if(verticalWalls[y][x] == 1) {
+                if(x == 16){
+                    API_setWall(x - 1, y, 'e');
                 } else{
-                    API_setWall(i, j, 'w');
+                    API_setWall(x, y, 'w');
                 }
             }
         }
@@ -91,7 +72,7 @@ void setWalls(){
 int getManhattanDistance(int x, int y) {
     if(x < 0 || x > 15 || y < 0 || y > 15)
         return __INT_MAX__;
-    return manhattanDistances[x][y];
+    return manhattanDistances[y][x];
 }
 
 void floodFill() {
@@ -99,6 +80,17 @@ void floodFill() {
     Cell queue[256];
     int front = 0, rear = 0;
 
+    for(int i = 0; i < 16; i++) {
+        for(int j = 0; j < 16; j++) {
+            manhattanDistances[i][j] = -1;
+        }
+    }
+
+    manhattanDistances[7][7] = 0;
+    manhattanDistances[7][8] = 0;
+    manhattanDistances[8][7] = 0;
+    manhattanDistances[8][8] = 0;
+    
     queue[rear++] = (Cell) {7,7};
     queue[rear++] = (Cell) {7,8};
     queue[rear++] = (Cell) {8,7};
@@ -107,58 +99,108 @@ void floodFill() {
     while(front != rear) {
         Cell current = queue[front++];
         front %= 256;
-        int curx = current.row;
-        int cury = current.col;
+        int curx = current.x;
+        int cury = current.y;
 
-        int nextDist = manhattanDistances[curx][cury] + 1;
+        int nextDist = manhattanDistances[cury][curx] + 1;
 
         //up
-        if(!horizontalWalls[curx][cury + 1]) {
-            if(manhattanDistances[curx][cury + 1] == -1) {
-                manhattanDistances[curx][cury + 1] = nextDist;
+        if(!horizontalWalls[cury + 1][curx]) {
+            if(manhattanDistances[cury+1][curx] == -1) {
+                manhattanDistances[cury+1][curx] = nextDist;
                 queue[rear++] = (Cell) {curx, cury + 1};
                 rear %= 256;
             }
         }
 
         // right
-        if(!verticalWalls[curx + 1][cury]) {           
-            if(manhattanDistances[curx + 1][cury] == -1) {
-                manhattanDistances[curx + 1][cury] = nextDist;
+        if(!verticalWalls[cury][curx + 1]) {           
+            if(manhattanDistances[cury][curx+1] == -1) {
+                manhattanDistances[cury][curx+1] = nextDist;
                 queue[rear++] = (Cell) {curx + 1, cury};
                 rear %= 256;
             }
         }
 
         // down
-        if(!horizontalWalls[curx][cury]) {  
-            if(manhattanDistances[curx][cury - 1] == -1) {
-                manhattanDistances[curx][cury - 1] = nextDist;
+        if(!horizontalWalls[cury][curx]) {  
+            if(manhattanDistances[cury-1][curx] == -1) {
+                manhattanDistances[cury-1][curx] = nextDist;
                 queue[rear++] = (Cell) {curx, cury - 1};
                 rear %= 256;
             }
         }
 
         // left
-        if(!verticalWalls[curx][cury]) { 
-            if(manhattanDistances[curx - 1][cury] == -1) {
-                manhattanDistances[curx - 1][cury] = nextDist;
+        if(!verticalWalls[cury][curx]) { 
+            if(manhattanDistances[cury][curx-1] == -1) {
+                manhattanDistances[cury][curx-1] = nextDist;
                 queue[rear++] = (Cell) {curx - 1, cury};
                 rear %= 256;
             }
         }
     }
     
+    char distStr[3];
+    int distInt;
     for(int curx = 0; curx < 16; curx++){
         for(int cury = 0; cury < 16; cury++){
-            char distStr[3];
-            int distInt = manhattanDistances[curx][cury];
+            distInt = manhattanDistances[cury][curx];
             sprintf(distStr, "%d", distInt);
             API_setText(curx, cury, distStr);
         }
     }
 
     setWalls();
+}
+
+
+void turnRight() {
+    switch(heading) {
+        case NORTH:
+            heading = EAST;
+            break;
+        case SOUTH:
+            heading = WEST;
+            break;
+        case EAST:
+            heading = SOUTH;
+            break;
+        case WEST:
+            heading = NORTH;       
+    }
+}
+
+void turnLeft() {
+    switch(heading) {
+        case NORTH:
+            heading = WEST;
+                break;
+            case SOUTH:
+                heading = EAST;
+                break;
+            case EAST:
+                heading = NORTH;
+                break;
+            case WEST:
+                heading = SOUTH;
+    }
+}
+
+void goForward() {
+    switch(heading) {
+        case NORTH:
+            y++;
+            break;
+        case SOUTH:
+            y--;
+            break;
+        case EAST:
+            x++;
+            break;
+        case WEST:
+            x--;
+    }
 }
 
 Action solver() {
@@ -175,46 +217,46 @@ Action solver() {
     switch(heading) {
         case NORTH:
             if(API_wallLeft()) {
-                verticalWalls[x][y] = 1;
+                verticalWalls[y][x] = 1;
             }
             if(API_wallRight()) {
-                verticalWalls[x + 1][y] = 1;
+                verticalWalls[y][x+1] = 1;
             }
             if(API_wallFront()) {
-                horizontalWalls[x][y + 1] = 1;
+                horizontalWalls[y+1][x] = 1;
             }
             break;
         case SOUTH:
             if(API_wallLeft()) {
-                verticalWalls[x + 1][y] = 1;
+                verticalWalls[y][x+1] = 1;
             }
             if(API_wallRight()) {
-                verticalWalls[x][y] = 1;
+                verticalWalls[y][x] = 1;
             }
             if(API_wallFront()) {
-                horizontalWalls[x][y] = 1;
+                horizontalWalls[y][x] = 1;
             }
             break;
         case EAST:
             if(API_wallLeft()) {
-                horizontalWalls[x][y + 1] = 1;
+                horizontalWalls[y+1][x] = 1;
             }
             if(API_wallRight()) {
-                horizontalWalls[x][y] = 1;
+                horizontalWalls[y][x] = 1;
             }
             if(API_wallFront()) {
-                verticalWalls[x + 1][y] = 1;
+                verticalWalls[y][x + 1] = 1;
             }
             break;
         case WEST:
             if(API_wallLeft()) {
-                horizontalWalls[x][y] = 1;
+                horizontalWalls[y][x] = 1;
             }
             if(API_wallRight()) {
-                horizontalWalls[x][y + 1] = 1;
+                horizontalWalls[y+1][x] = 1;
             }
             if(API_wallFront()) {
-                verticalWalls[x][y] = 1;
+                verticalWalls[y][x] = 1;
             }
     }
 
@@ -226,74 +268,65 @@ Action solver() {
 
     switch(heading){
         case NORTH:
-            if(verticalWalls[x][y] == 0) {
+            if(verticalWalls[y][x] == 0) {
                 left = getManhattanDistance(x-1, y);
             }
-            if(verticalWalls[x + 1][y] == 0) {
+            if(verticalWalls[y][x+1] == 0) {
                 right = getManhattanDistance(x+1,y);
             }
-            if(horizontalWalls[x][y + 1] == 0) {
+            if(horizontalWalls[y+1][x] == 0) {
                 forward = getManhattanDistance(x,y+1);
             }
             break;
         case SOUTH:
-            if(verticalWalls[x + 1][y] == 0) {
+            if(verticalWalls[y][x+1] == 0) {
                 left = getManhattanDistance(x+1,y);
             }
-            if(verticalWalls[x][y] == 0) {
+            if(verticalWalls[y][x] == 0) {
                 right = getManhattanDistance(x-1,y);
             }
-            if(horizontalWalls[x][y] == 0) {
+            if(horizontalWalls[y][x] == 0) {
                 forward = getManhattanDistance(x,y-1);
             }
             break;
         case EAST:
-            if(horizontalWalls[x][y + 1] == 0) {
+            if(horizontalWalls[y+1][x] == 0) {
                 left = getManhattanDistance(x,y+1);
             }
-            if(horizontalWalls[x][y] == 0) {
+            if(horizontalWalls[y][x] == 0) {
                 right = getManhattanDistance(x,y-1);
             }
-            if(verticalWalls[x + 1][y] == 0) {
+            if(verticalWalls[y][x+1] == 0) {
                 forward = getManhattanDistance(x+1,y);
             }
             break;
         case WEST:
-            if(horizontalWalls[x][y] == 0) {
+            if(horizontalWalls[y][x] == 0) {
                 left = getManhattanDistance(x,y-1);
             }
-            if(horizontalWalls[x][y + 1] == 0) {
+            if(horizontalWalls[y+1][x] == 0) {
                 right = getManhattanDistance(x,y+1);
             }
-            if(verticalWalls[x][y] == 0) {
+            if(verticalWalls[y][x] == 0) {
                 forward = getManhattanDistance(x-1,y);
             }
     }
 
-    sprintf(buf, "%d", left);
-    debug_log(buf);
-    sprintf(buf, "%d", forward);
-    debug_log(buf);
-    sprintf(buf, "%d", right);
-    debug_log(buf);
-    debug_log("");
-
-    if(left <= right && left <= forward){
-        return LEFT;
-    }
-    else if(right <= left && right <= forward){
+    if((left == __INT_MAX__) && (forward == __INT_MAX__) && (right == __INT_MAX__)) {
+        turnRight();
         return RIGHT;
     }
-    return FORWARD;
-}
 
-// This is an example of a simple left wall following algorithm.
-Action leftWallFollower() {
-    if(API_wallFront()) {
-        if(API_wallLeft()){
-            return RIGHT;
-        }
+    if(forward <= left && forward <= right) {
+        goForward();
+        return FORWARD;
+    }
+
+    if(left < right && left < forward){
+        turnLeft();
         return LEFT;
     }
-    return FORWARD;
+
+    turnRight();
+    return RIGHT;
 }
